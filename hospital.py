@@ -40,15 +40,60 @@ def load_data_ui():
 load_data_ui()
 
 # 📊 Chart display
+import altair as alt
+
+# 📊 Improved visualization with tooltips and labels
 def try_visualize(result):
     try:
         if isinstance(result, pd.Series):
-            st.bar_chart(result)
-        elif isinstance(result, pd.DataFrame):
-            chart_data = result.set_index(result.columns[0]).iloc[:, 0]
-            st.bar_chart(chart_data)
-    except:
-        pass
+            df_plot = result.reset_index()
+            df_plot.columns = ["Category", "Value"]
+
+            chart = (
+                alt.Chart(df_plot)
+                .mark_bar()
+                .encode(
+                    x=alt.X("Category:N", title=None, sort="-y"),
+                    y=alt.Y("Value:Q", title="Value"),
+                    tooltip=["Category", "Value"]
+                )
+                .properties(width=600, height=400)
+            )
+
+            text = (
+                alt.Chart(df_plot)
+                .mark_text(align='center', dy=-5, fontSize=12)
+                .encode(x="Category:N", y="Value:Q", text="Value")
+            )
+
+            st.altair_chart(chart + text, use_container_width=True)
+
+        elif isinstance(result, pd.DataFrame) and result.shape[1] >= 2:
+            df_plot = result.reset_index()
+            df_plot.columns = ["Category", "Value"]
+
+            chart = (
+                alt.Chart(df_plot)
+                .mark_bar()
+                .encode(
+                    x=alt.X("Category:N", title=None, sort="-y"),
+                    y=alt.Y("Value:Q", title="Value"),
+                    tooltip=["Category", "Value"]
+                )
+                .properties(width=600, height=400)
+            )
+
+            text = (
+                alt.Chart(df_plot)
+                .mark_text(align='center', dy=-5, fontSize=12)
+                .encode(x="Category:N", y="Value:Q", text="Value")
+            )
+
+            st.altair_chart(chart + text, use_container_width=True)
+
+    except Exception as e:
+        st.warning(f"Could not render interactive chart: {e}")
+
 
 # 📝 Summary formatter
 def format_summary(summary_text: str) -> str:
