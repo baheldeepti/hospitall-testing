@@ -2,27 +2,44 @@ import streamlit as st
 import pandas as pd
 import openai
 import matplotlib.pyplot as plt
-from io import StringIO
 import traceback
 import re
 
 # 🔐 Set API key securely
 openai.api_key = st.secrets.get("OPENAI_API_KEY") or st.session_state.get("OPENAI_API_KEY")
 
-# 📄 Load dataset once
-@st.cache_data
-def load_data():
-    url = "https://raw.githubusercontent.com/baheldeepti/hospital-streamlit-app/main/modified_healthcare_dataset.csv"
-    return pd.read_csv(url)
-
-df = load_data()
-columns = ", ".join(df.columns)
-
-# 🔄 Initialize chat history
+# 🧠 Initialize session state
+if "main_df" not in st.session_state:
+    st.session_state["main_df"] = None
 if "history" not in st.session_state:
     st.session_state.history = []
+if "query_log" not in st.session_state:
+    st.session_state["query_log"] = []
+if "fallback_log" not in st.session_state:
+    st.session_state["fallback_log"] = []
 
-# 📊 Helper to display chart
+# 📁 File upload UI
+def load_data_ui():
+    with st.sidebar.expander("📁 Load or Upload Dataset", expanded=True):
+        st.markdown("Upload your CSV or use our sample dataset.")
+        if st.button("📥 Load Sample Data"):
+            df = pd.read_csv("https://raw.githubusercontent.com/baheldeepti/hospital-streamlit-app/main/modified_healthcare_dataset.csv")
+            st.session_state["main_df"] = df
+            st.success("✅ Sample dataset loaded.")
+        uploaded_file = st.file_uploader("Upload CSV", type="csv")
+        if uploaded_file:
+            with st.spinner("Loading your file..."):
+                try:
+                    df = pd.read_csv(uploaded_file)
+                    st.session_state["main_df"] = df
+                    st.success("✅ Uploaded data loaded successfully.")
+                    st.dataframe(df.head(10))
+                except Exception as e:
+                    st.error(f"Error loading file: {e}")
+
+load_data_ui()
+
+# 📊 Chart display
 def try_visualize(result):
     try:
         if isinstance(result, pd.Series):
@@ -33,12 +50,11 @@ def try_visualize(result):
     except:
         pass
 
-# ✅ Format summary string for better readability
+# 📝 Summary formatter
 def format_summary(summary_text: str) -> str:
     summary = re.sub(r"\s+", " ", summary_text).strip()
     summary = re.sub(r"(\d),\s(\d)", r"\1\2", summary)
     hospitals = re.split(r",\s*|\band\b", summary)
-
     formatted_lines = []
     for hospital in hospitals:
         match = re.search(r"([A-Za-z0-9() \-]+?)\s+billed\s+approximately\s+\$?([\d,]+)", hospital)
@@ -46,12 +62,11 @@ def format_summary(summary_text: str) -> str:
             name = match.group(1).strip()
             amount = match.group(2).replace(",", "")
             formatted_lines.append(f"- **{name}**: ${int(amount):,}")
-
     if not formatted_lines:
         return f"📝 **Summary:** {summary}"
     return "📝 **Summary**  \n" + "\n".join(formatted_lines)
 
-# 🧠 Ask GPT for a summary
+# 🧠 GPT-based summary
 def get_summary(question, result_str):
     summary_prompt = f"""You are a helpful assistant.
 The user asked: {question}
@@ -67,12 +82,20 @@ Summarize the insight clearly."""
     except:
         return ""
 
-# 🧠 Main chatbot handler
+# 🧠 Main chat handler
 def handle_chat(question):
+    df = st.session_state["main_df"]
+    if df is None:
+        st.warning("Please upload a dataset or load the sample.")
+        return
+
+    columns = ", ".join(df.columns)
+
     st.chat_message("user").write(question)
     st.session_state.history.append({"role": "user", "content": question})
+    st.session_state.query_log.append(question)
 
-    prompt = f"""You are a pandas expert working with this DataFrame: df
+    prompt = f"""You are a senior data analyst working with this DataFrame: df
 Available columns: {columns}
 Conversation so far:
 {st.session_state.history}
@@ -109,11 +132,34 @@ Write executable pandas code to answer the **last user question only**.
                 st.session_state.history.append({"role": "assistant", "content": summary})
 
     except Exception as e:
+        st.session_state.fallback_log.append(question)
         st.chat_message("assistant").error(f"Error:\n{traceback.format_exc()}")
 
-# 🧪 Streamlit chat UI
+# 🪵 Logs only
+def render_logs():
+    st.subheader("🪵 Conversation Logs")
+    query_log = st.session_state.get("query_log", [])
+    if query_log:
+        st.markdown("### 🔁 Most Asked Questions")
+        log_df = pd.DataFrame(query_log, columns=["Query"])
+        value_counts = log_df["Query"].value_counts().reset_index()
+        value_counts.columns = ["Query", "Count"]
+        st.dataframe(value_counts)
+    else:
+        st.info("No queries logged yet.")
+    fallback_log = st.session_state.get("fallback_log", [])
+    if fallback_log:
+        st.markdown("### ⚠️ Fallback Queries (Unanswered)")
+        fallback_df = pd.DataFrame(fallback_log, columns=["Query"])
+        st.dataframe(fallback_df)
+
+# 🧪 App UI
 st.title("🏥 Hospital Chat Assistant")
 st.markdown("Ask questions about hospital data. Get real answers with charts and code-backed insights!")
 
 if prompt := st.chat_input("Ask a question about the hospital dataset..."):
     handle_chat(prompt)
+
+# 🪵 Logs display
+st.markdown("---")
+render_logs()
