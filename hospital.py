@@ -3,7 +3,6 @@ import pandas as pd
 import openai
 import matplotlib.pyplot as plt
 from io import StringIO
-from IPython.display import display
 import traceback
 
 
