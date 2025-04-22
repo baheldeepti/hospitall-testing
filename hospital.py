@@ -41,7 +41,7 @@ import pandas as pd
 
 def try_visualize(result):
     try:
-        # Convert Series to DataFrame
+        # Convert to DataFrame
         if isinstance(result, pd.Series):
             df_plot = result.reset_index()
         elif isinstance(result, pd.DataFrame):
@@ -50,41 +50,40 @@ def try_visualize(result):
             st.warning("Unsupported result type for visualization.")
             return
 
-        # Automatically detect numeric column for Y and categorical for X
+        # Detect numeric and categorical columns
         numeric_cols = df_plot.select_dtypes(include='number').columns.tolist()
         non_numeric_cols = df_plot.select_dtypes(exclude='number').columns.tolist()
 
-        if len(numeric_cols) == 0 or len(non_numeric_cols) == 0:
-            st.warning("Need at least one numeric and one categorical column to plot.")
+        if not numeric_cols:
+            st.warning("No numeric column found for Y-axis.")
+            return
+        if not non_numeric_cols:
+            st.warning("No categorical column found for X-axis.")
             return
 
-        x_col = non_numeric_cols[0]
         y_col = numeric_cols[0]
+        x_col = non_numeric_cols[0]
+        color_col = non_numeric_cols[1] if len(non_numeric_cols) > 1 else None
 
-        df_plot = df_plot[[x_col, y_col]].dropna()
-        df_plot.columns = ["Category", "Value"]
+        # Prepare plotting data
+        df_plot = df_plot[[x_col] + ([color_col] if color_col else []) + [y_col]].dropna()
+        df_plot.columns = ["Category"] + (["Subgroup"] if color_col else []) + ["Value"]
 
-        chart = (
-            alt.Chart(df_plot)
-            .mark_bar()
-            .encode(
-                x=alt.X("Category:N", sort="-y", title=None),
-                y=alt.Y("Value:Q", title="Value"),
-                tooltip=["Category", "Value"]
-            )
-            .properties(width=600, height=400)
+        # Build chart
+        base = alt.Chart(df_plot).mark_bar().encode(
+            x=alt.X("Category:N", sort="-y", title="Category"),
+            y=alt.Y("Value:Q", title="Value"),
+            tooltip=["Category", "Value"] + (["Subgroup"] if color_col else [])
         )
 
-        labels = (
-            alt.Chart(df_plot)
-            .mark_text(align="center", dy=-5, fontSize=12)
-            .encode(x="Category:N", y="Value:Q", text=alt.Text("Value:Q", format=",.0f"))
-        )
+        if color_col:
+            base = base.encode(color="Subgroup:N")
 
-        st.altair_chart(chart + labels, use_container_width=True)
+        st.altair_chart(base.properties(width=700, height=400), use_container_width=True)
 
     except Exception as e:
         st.warning(f"Could not render chart: {e}")
+
 
 # 📝 Summary formatter
 def format_summary(summary_text: str) -> str:
