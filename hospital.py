@@ -7,7 +7,7 @@ import traceback
 
 
 # 🔐 Set API key securely
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+openai.api_key = st.secrets.get("OPENAI_API_KEY") or st.session_state.get("OPENAI_API_KEY")
 
 # 📄 Load dataset once
 @st.cache_data
