@@ -3,10 +3,9 @@ import pandas as pd
 import openai
 import matplotlib.pyplot as plt
 from io import StringIO
+from IPython.display import display
 import traceback
 
-from llama_index.core import Settings
-from IPython.display import display
 
 # 🔐 Set API key securely
 openai.api_key = st.secrets["OPENAI_API_KEY"]
