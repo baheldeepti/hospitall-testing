@@ -35,10 +35,6 @@ def load_data_ui():
                     st.error(f"Error loading file: {e}")
 
 # 📊 Dynamic chart with tooltips + labels
-import altair as alt
-import streamlit as st
-import pandas as pd
-
 def try_visualize(result):
     try:
         # Convert to DataFrame
@@ -66,24 +62,23 @@ def try_visualize(result):
         color_col = non_numeric_cols[1] if len(non_numeric_cols) > 1 else None
 
         # Prepare plotting data
-        df_plot = df_plot[[x_col] + ([color_col] if color_col else []) + [y_col]].dropna()
+        selected_cols = [x_col, y_col] if not color_col else [x_col, color_col, y_col]
+        df_plot = df_plot[selected_cols].dropna()
         df_plot.columns = ["Category"] + (["Subgroup"] if color_col else []) + ["Value"]
 
         # Build chart
-        base = alt.Chart(df_plot).mark_bar().encode(
+        chart = alt.Chart(df_plot).mark_bar().encode(
             x=alt.X("Category:N", sort="-y", title="Category"),
             y=alt.Y("Value:Q", title="Value"),
             tooltip=["Category", "Value"] + (["Subgroup"] if color_col else [])
         )
-
         if color_col:
-            base = base.encode(color="Subgroup:N")
+            chart = chart.encode(color="Subgroup:N")
 
-        st.altair_chart(base.properties(width=700, height=400), use_container_width=True)
+        st.altair_chart(chart.properties(width=700, height=400), use_container_width=True)
 
     except Exception as e:
         st.warning(f"Could not render chart: {e}")
-
 
 # 📝 Summary formatter
 def format_summary(summary_text: str) -> str:
@@ -93,7 +88,7 @@ def format_summary(summary_text: str) -> str:
 def get_summary(question, result_str):
     summary_prompt = f"You are a helpful assistant.\nThe user asked: {question}\nThe result of the query was: {result_str}\nSummarize the insight clearly."
     try:
-        response = openai.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[{"role": "user", "content": summary_prompt}]
         )
@@ -116,7 +111,7 @@ def handle_chat(question):
     prompt = f"You are a senior data analyst working with this DataFrame: df\nAvailable columns: {columns}\nConversation so far:\n{st.session_state.history}\n\nWrite executable pandas code to answer the **last user question only**.\n- Assign output to a variable named `result`\n- Use only valid column names from the DataFrame\n- Do not include explanations or print statements\n- Only output valid Python code"
 
     try:
-        response = openai.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0
