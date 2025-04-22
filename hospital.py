@@ -4,7 +4,7 @@ import openai
 import matplotlib.pyplot as plt
 from io import StringIO
 import traceback
-
+import re
 
 # 🔐 Set API key securely
 openai.api_key = st.secrets.get("OPENAI_API_KEY") or st.session_state.get("OPENAI_API_KEY")
@@ -33,6 +33,24 @@ def try_visualize(result):
     except:
         pass
 
+# ✅ Format summary string for better readability
+def format_summary(summary_text: str) -> str:
+    summary = re.sub(r"\s+", " ", summary_text).strip()
+    summary = re.sub(r"(\d),\s(\d)", r"\1\2", summary)
+    hospitals = re.split(r",\s*|\band\b", summary)
+
+    formatted_lines = []
+    for hospital in hospitals:
+        match = re.search(r"([A-Za-z0-9() \-]+?)\s+billed\s+approximately\s+\$?([\d,]+)", hospital)
+        if match:
+            name = match.group(1).strip()
+            amount = match.group(2).replace(",", "")
+            formatted_lines.append(f"- **{name}**: ${int(amount):,}")
+
+    if not formatted_lines:
+        return f"📝 **Summary:** {summary}"
+    return "📝 **Summary**  \n" + "\n".join(formatted_lines)
+
 # 🧠 Ask GPT for a summary
 def get_summary(question, result_str):
     summary_prompt = f"""You are a helpful assistant.
@@ -44,7 +62,8 @@ Summarize the insight clearly."""
             model="gpt-4",
             messages=[{"role": "user", "content": summary_prompt}]
         )
-        return response.choices[0].message.content.strip()
+        raw_summary = response.choices[0].message.content.strip()
+        return format_summary(raw_summary)
     except:
         return ""
 
@@ -53,7 +72,6 @@ def handle_chat(question):
     st.chat_message("user").write(question)
     st.session_state.history.append({"role": "user", "content": question})
 
-    # Build prompt
     prompt = f"""You are a pandas expert working with this DataFrame: df
 Available columns: {columns}
 Conversation so far:
@@ -61,6 +79,7 @@ Conversation so far:
 
 Write executable pandas code to answer the **last user question only**.
 - Assign output to a variable named `result`
+- Use only valid column names from the DataFrame
 - Do not include explanations or print statements
 - Only output valid Python code"""
     
@@ -86,7 +105,7 @@ Write executable pandas code to answer the **last user question only**.
 
             summary = get_summary(question, str(result))
             if summary:
-                st.markdown(f"**📝 Summary:** {summary}")
+                st.markdown(summary)
                 st.session_state.history.append({"role": "assistant", "content": summary})
 
     except Exception as e:
