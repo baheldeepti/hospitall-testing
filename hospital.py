@@ -1,22 +1,19 @@
+
 import streamlit as st
 import pandas as pd
 import openai
 import matplotlib.pyplot as plt
+import altair as alt
 import traceback
 import re
 
-# 🔐 Set API key securely
+# 🔐 Secure API key access
 openai.api_key = st.secrets.get("OPENAI_API_KEY") or st.session_state.get("OPENAI_API_KEY")
 
 # 🧠 Initialize session state
-if "main_df" not in st.session_state:
-    st.session_state["main_df"] = None
-if "history" not in st.session_state:
-    st.session_state.history = []
-if "query_log" not in st.session_state:
-    st.session_state["query_log"] = []
-if "fallback_log" not in st.session_state:
-    st.session_state["fallback_log"] = []
+for key in ["main_df", "history", "query_log", "fallback_log"]:
+    if key not in st.session_state:
+        st.session_state[key] = [] if "log" in key or key == "history" else None
 
 # 📁 File upload UI
 def load_data_ui():
@@ -37,37 +34,25 @@ def load_data_ui():
                 except Exception as e:
                     st.error(f"Error loading file: {e}")
 
-load_data_ui()
-
-import altair as alt
-
-# 📊 Fully dynamic chart with tooltips + labels
+# 📊 Dynamic chart with tooltips + labels
 def try_visualize(result):
     try:
-        # Handle Series
         if isinstance(result, pd.Series):
             df_plot = result.reset_index()
             df_plot.columns = ["Category", "Value"]
-
-        # Handle DataFrame with 2 columns
         elif isinstance(result, pd.DataFrame) and result.shape[1] == 2:
             df_plot = result.reset_index(drop=True)
             df_plot.columns = ["Category", "Value"]
-
-        # Handle DataFrame with index + 1 column (common case)
         elif isinstance(result, pd.DataFrame) and result.shape[1] == 1:
             df_plot = result.reset_index()
             df_plot.columns = ["Category", "Value"]
-
         else:
             st.warning("This result can't be visualized as a simple chart.")
             return
 
-        # Make sure values are numeric
         df_plot = df_plot[pd.to_numeric(df_plot["Value"], errors="coerce").notna()]
         df_plot["Value"] = df_plot["Value"].astype(float)
 
-        # Create chart
         chart = (
             alt.Chart(df_plot)
             .mark_bar()
@@ -90,36 +75,19 @@ def try_visualize(result):
     except Exception as e:
         st.warning(f"Could not render chart: {e}")
 
-
 # 📝 Summary formatter
 def format_summary(summary_text: str) -> str:
-    summary = re.sub(r"\s+", " ", summary_text).strip()
-    summary = re.sub(r"(\d),\s(\d)", r"\1\2", summary)
-    hospitals = re.split(r",\s*|\band\b", summary)
-    formatted_lines = []
-    for hospital in hospitals:
-        match = re.search(r"([A-Za-z0-9() \-]+?)\s+billed\s+approximately\s+\$?([\d,]+)", hospital)
-        if match:
-            name = match.group(1).strip()
-            amount = match.group(2).replace(",", "")
-            formatted_lines.append(f"- **{name}**: ${int(amount):,}")
-    if not formatted_lines:
-        return f"📝 **Summary:** {summary}"
-    return "📝 **Summary**  \n" + "\n".join(formatted_lines)
+    return f"📝 **Summary:** {summary_text.strip()}"
 
 # 🧠 GPT-based summary
 def get_summary(question, result_str):
-    summary_prompt = f"""You are a helpful assistant.
-The user asked: {question}
-The result of the query was: {result_str}
-Summarize the insight clearly."""
+    summary_prompt = f"You are a helpful assistant.\nThe user asked: {question}\nThe result of the query was: {result_str}\nSummarize the insight clearly."
     try:
-        response = openai.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[{"role": "user", "content": summary_prompt}]
         )
-        raw_summary = response.choices[0].message.content.strip()
-        return format_summary(raw_summary)
+        return format_summary(response.choices[0].message.content.strip())
     except:
         return ""
 
@@ -131,24 +99,14 @@ def handle_chat(question):
         return
 
     columns = ", ".join(df.columns)
-
     st.chat_message("user").write(question)
     st.session_state.history.append({"role": "user", "content": question})
     st.session_state.query_log.append(question)
 
-    prompt = f"""You are a senior data analyst working with this DataFrame: df
-Available columns: {columns}
-Conversation so far:
-{st.session_state.history}
+    prompt = f"You are a senior data analyst working with this DataFrame: df\nAvailable columns: {columns}\nConversation so far:\n{st.session_state.history}\n\nWrite executable pandas code to answer the **last user question only**.\n- Assign output to a variable named `result`\n- Use only valid column names from the DataFrame\n- Do not include explanations or print statements\n- Only output valid Python code"
 
-Write executable pandas code to answer the **last user question only**.
-- Assign output to a variable named `result`
-- Use only valid column names from the DataFrame
-- Do not include explanations or print statements
-- Only output valid Python code"""
-    
     try:
-        response = openai.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0
@@ -188,6 +146,7 @@ def render_logs():
         st.dataframe(value_counts)
     else:
         st.info("No queries logged yet.")
+
     fallback_log = st.session_state.get("fallback_log", [])
     if fallback_log:
         st.markdown("### ⚠️ Fallback Queries (Unanswered)")
@@ -197,6 +156,7 @@ def render_logs():
 # 🧪 App UI
 st.title("🏥 Hospital Chat Assistant")
 st.markdown("Ask questions about hospital data. Get real answers with charts and code-backed insights!")
+load_data_ui()
 
 if prompt := st.chat_input("Ask a question about the hospital dataset..."):
     handle_chat(prompt)
