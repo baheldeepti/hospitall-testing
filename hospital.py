@@ -39,60 +39,56 @@ def load_data_ui():
 
 load_data_ui()
 
-# 📊 Chart display
 import altair as alt
 
-# 📊 Improved visualization with tooltips and labels
+# 📊 Fully dynamic chart with tooltips + labels
 def try_visualize(result):
     try:
+        # Handle Series
         if isinstance(result, pd.Series):
             df_plot = result.reset_index()
             df_plot.columns = ["Category", "Value"]
 
-            chart = (
-                alt.Chart(df_plot)
-                .mark_bar()
-                .encode(
-                    x=alt.X("Category:N", title=None, sort="-y"),
-                    y=alt.Y("Value:Q", title="Value"),
-                    tooltip=["Category", "Value"]
-                )
-                .properties(width=600, height=400)
-            )
+        # Handle DataFrame with 2 columns
+        elif isinstance(result, pd.DataFrame) and result.shape[1] == 2:
+            df_plot = result.reset_index(drop=True)
+            df_plot.columns = ["Category", "Value"]
 
-            text = (
-                alt.Chart(df_plot)
-                .mark_text(align='center', dy=-5, fontSize=12)
-                .encode(x="Category:N", y="Value:Q", text="Value")
-            )
-
-            st.altair_chart(chart + text, use_container_width=True)
-
-        elif isinstance(result, pd.DataFrame) and result.shape[1] >= 2:
+        # Handle DataFrame with index + 1 column (common case)
+        elif isinstance(result, pd.DataFrame) and result.shape[1] == 1:
             df_plot = result.reset_index()
             df_plot.columns = ["Category", "Value"]
 
-            chart = (
-                alt.Chart(df_plot)
-                .mark_bar()
-                .encode(
-                    x=alt.X("Category:N", title=None, sort="-y"),
-                    y=alt.Y("Value:Q", title="Value"),
-                    tooltip=["Category", "Value"]
-                )
-                .properties(width=600, height=400)
-            )
+        else:
+            st.warning("This result can't be visualized as a simple chart.")
+            return
 
-            text = (
-                alt.Chart(df_plot)
-                .mark_text(align='center', dy=-5, fontSize=12)
-                .encode(x="Category:N", y="Value:Q", text="Value")
-            )
+        # Make sure values are numeric
+        df_plot = df_plot[pd.to_numeric(df_plot["Value"], errors="coerce").notna()]
+        df_plot["Value"] = df_plot["Value"].astype(float)
 
-            st.altair_chart(chart + text, use_container_width=True)
+        # Create chart
+        chart = (
+            alt.Chart(df_plot)
+            .mark_bar()
+            .encode(
+                x=alt.X("Category:N", sort="-y", title=None),
+                y=alt.Y("Value:Q", title="Value"),
+                tooltip=["Category", "Value"]
+            )
+            .properties(width=600, height=400)
+        )
+
+        text = (
+            alt.Chart(df_plot)
+            .mark_text(align="center", dy=-5, fontSize=12)
+            .encode(x="Category:N", y="Value:Q", text=alt.Text("Value:Q", format=",.0f"))
+        )
+
+        st.altair_chart(chart + text, use_container_width=True)
 
     except Exception as e:
-        st.warning(f"Could not render interactive chart: {e}")
+        st.warning(f"Could not render chart: {e}")
 
 
 # 📝 Summary formatter
