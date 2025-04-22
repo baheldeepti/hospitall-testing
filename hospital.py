@@ -35,23 +35,34 @@ def load_data_ui():
                     st.error(f"Error loading file: {e}")
 
 # 📊 Dynamic chart with tooltips + labels
+import altair as alt
+import streamlit as st
+import pandas as pd
+
 def try_visualize(result):
     try:
+        # Convert Series to DataFrame
         if isinstance(result, pd.Series):
             df_plot = result.reset_index()
-            df_plot.columns = ["Category", "Value"]
-        elif isinstance(result, pd.DataFrame) and result.shape[1] == 2:
+        elif isinstance(result, pd.DataFrame):
             df_plot = result.reset_index(drop=True)
-            df_plot.columns = ["Category", "Value"]
-        elif isinstance(result, pd.DataFrame) and result.shape[1] == 1:
-            df_plot = result.reset_index()
-            df_plot.columns = ["Category", "Value"]
         else:
-            st.warning("This result can't be visualized as a simple chart.")
+            st.warning("Unsupported result type for visualization.")
             return
 
-        df_plot = df_plot[pd.to_numeric(df_plot["Value"], errors="coerce").notna()]
-        df_plot["Value"] = df_plot["Value"].astype(float)
+        # Automatically detect numeric column for Y and categorical for X
+        numeric_cols = df_plot.select_dtypes(include='number').columns.tolist()
+        non_numeric_cols = df_plot.select_dtypes(exclude='number').columns.tolist()
+
+        if len(numeric_cols) == 0 or len(non_numeric_cols) == 0:
+            st.warning("Need at least one numeric and one categorical column to plot.")
+            return
+
+        x_col = non_numeric_cols[0]
+        y_col = numeric_cols[0]
+
+        df_plot = df_plot[[x_col, y_col]].dropna()
+        df_plot.columns = ["Category", "Value"]
 
         chart = (
             alt.Chart(df_plot)
@@ -64,13 +75,13 @@ def try_visualize(result):
             .properties(width=600, height=400)
         )
 
-        text = (
+        labels = (
             alt.Chart(df_plot)
             .mark_text(align="center", dy=-5, fontSize=12)
             .encode(x="Category:N", y="Value:Q", text=alt.Text("Value:Q", format=",.0f"))
         )
 
-        st.altair_chart(chart + text, use_container_width=True)
+        st.altair_chart(chart + labels, use_container_width=True)
 
     except Exception as e:
         st.warning(f"Could not render chart: {e}")
