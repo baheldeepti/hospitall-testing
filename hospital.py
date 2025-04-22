@@ -118,11 +118,12 @@ def handle_chat(question):
         )
         # code = response.choices[0].message.content.strip()
         raw_code = response.choices[0].message.content.strip()
-        code = re.sub(r"(?s)```(?:python)?\\s*(.*?)\\s*```", r"\1", raw_code)
+        raw_code = response.choices[0].message.content.strip()
+        code = re.sub(r"(?s)```(?:python)?\s*(.*?)\s*```", r"\1", raw_code)
         code = re.sub(r"^```|```$", "", code).strip()
-        # code = re.sub(r"(?s)```(?:python)?\\n?(.*?)```", r"\\1", raw_code).strip()
-        # code = re.sub(r"```", "", code).strip()
-        # code = re.sub(r"```(?:python)?\\n?|```", "", raw_code).strip()
+        # ✅ Fully cleaned code for exec()
+
+
 
         st.code(code, language="python")
 
