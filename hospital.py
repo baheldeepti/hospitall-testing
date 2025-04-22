@@ -42,7 +42,7 @@ The user asked: {question}
 The result of the query was: {result_str}
 Summarize the insight clearly."""
     try:
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": summary_prompt}]
         )
@@ -67,7 +67,7 @@ Write executable pandas code to answer the **last user question only**.
 - Only output valid Python code"""
     
     try:
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0
