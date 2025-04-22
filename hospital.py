@@ -116,7 +116,10 @@ def handle_chat(question):
             messages=[{"role": "user", "content": prompt}],
             temperature=0
         )
-        code = response.choices[0].message.content.strip()
+        # code = response.choices[0].message.content.strip()
+        raw_code = response.choices[0].message.content.strip()
+        code = re.sub(r"```(?:python)?\\n?|```", "", raw_code).strip()
+
         st.code(code, language="python")
 
         local_vars = {"df": df}
